@@ -38,30 +38,43 @@ jobs:
 
     steps:
     - name: Checkout | 使用actions/checkout@v3
+      # 使用别人封装好的的action，用于clone该仓库的源码到工作流中
       uses: actions/checkout@v3
 
     - name: Initialization Environment | 初始化环境
       env:
+        # DEBIAN_FRONTEND这个环境变量，告知操作系统应该从哪儿获得用户输入。
+        # 如果设置为”noninteractive”，你就可以直接运行命令，而无需向用户请求输入（所有操作都是非交互式的）。
+        # 这在运行apt-get命令的时候格外有用，因为它会不停的提示用户进行到了哪步并且需要不断确认。
         DEBIAN_FRONTEND: noninteractive
       run: |
+        # 输出CPU的内核数量
         echo -e "Total CPU cores\t: $(nproc)"
+        # 输出CPU的型号信息
         cat /proc/cpuinfo | grep 'model name'
+        # 以合适的单位显示内存使用情况
         free -h
+        # 查看系统内核版本号及系统名称
         uname -a
+        # 查看系统各种信息
         [ -f /proc/version ] && cat /proc/version
         [ -f /etc/issue.net ] && cat /etc/issue.net
         [ -f /etc/issue ] && cat /etc/issue
+        # 查看系统栈空间的限制
         ulimit -a
         
     - name: Clone Source Code | 克隆Openwrt源代码
       run: |
+        # 查看当前路径的空间大小
         df -hT $PWD
+        echo "Current PATH: $PWD"
         git clone $REPO_URL -b $REPO_BRANCH openwrt
         cd openwrt
         
     - name: Update Feeds | 更新Feeds
       id: update
       run: |
+        echo "Current PATH: $PWD"
         cd openwrt
         echo "OPENWRTROOT=$PWD" >> $GITHUB_ENV
         echo "OPENWRTROOT=$PWD" >> $GITHUB_OUTPUT
@@ -73,11 +86,13 @@ jobs:
 
     - name: Install Feeds | 安装Feeds
       run: |
+        echo "Current PATH: $PWD"
         cd $OPENWRTROOT
         ./scripts/feeds install -a
         
     - name: Load Custom Configuration | 加载自定义配置
       run: |
+        echo "Current PATH: $PWD"
         [ -e files ] && mv files $OPENWRTROOT/files
         [ -e $CONFIG_FILE ] && mv $CONFIG_FILE $OPENWRTROOT/.config
         chmod +x scripts/*.sh
@@ -90,8 +105,6 @@ jobs:
     - name: Download Package | 下载各种包
       id: package
       run: |
+        echo "Current PATH: $PWD"
         cd $OPENWRTROOT
         cat .config
-        make download -j8
-        find dl -size -1024c -exec ls -l {} \;
-        find dl -size -1024c -exec rm -f {} \;
