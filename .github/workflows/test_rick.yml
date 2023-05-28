@@ -53,21 +53,7 @@ jobs:
         [ -f /etc/issue.net ] && cat /etc/issue.net
         [ -f /etc/issue ] && cat /etc/issue
         ulimit -a
-        
-    - name: Install Feeds | 安装Feeds
-      run: |
-        cd $OPENWRTROOT
-        ./scripts/feeds install -a
-        
-    - name: Download Package | 下载各种包
-      id: package
-      run: |
-        cd $OPENWRTROOT
-        cat .config
-        make download -j8
-        find dl -size -1024c -exec ls -l {} \;
-        find dl -size -1024c -exec rm -f {} \;
-  
+
     - name: Compile Packages | 编译各种包
       id: compile
       run: |
