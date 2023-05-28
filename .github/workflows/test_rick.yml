@@ -6,7 +6,7 @@
 # Blog: https://p3terx.com
 #=================================================
 
-name: NanoPi-R4S-全插件(重编译)
+name: NanoPi-R4S-全插件（不删除版）
 
 on:
   repository_dispatch:
@@ -38,6 +38,65 @@ jobs:
       GENERATE_STATUS: ${{ steps.generate.outputs.GENERATE_STATUS }}
 
     steps:
+    - name: Checkout | 使用actions/checkout@v3
+      uses: actions/checkout@v3
+
+    - name: Initialization Environment | 初始化环境
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        echo -e "Total CPU cores\t: $(nproc)"
+        cat /proc/cpuinfo | grep 'model name'
+        free -h
+        uname -a
+        [ -f /proc/version ] && cat /proc/version
+        [ -f /etc/issue.net ] && cat /etc/issue.net
+        [ -f /etc/issue ] && cat /etc/issue
+        ulimit -a
+        
+    - name: Clone Source Code | 克隆Openwrt源代码
+      run: |
+        df -hT $PWD
+        git clone $REPO_URL -b $REPO_BRANCH openwrt
+        cd openwrt
+        
+    - name: Update Feeds | 更新Feeds
+      id: update
+      run: |
+        cd openwrt
+        echo "OPENWRTROOT=$PWD" >> $GITHUB_ENV
+        echo "OPENWRTROOT=$PWD" >> $GITHUB_OUTPUT
+        mkdir customfeeds
+        git clone --depth=1 https://github.com/DHDAXCW/packages customfeeds/packages
+        git clone --depth=1 https://github.com/DHDAXCW/luci customfeeds/luci
+        chmod +x ../scripts/*.sh
+        ../scripts/hook-feeds.sh
+
+    - name: Install Feeds | 安装Feeds
+      run: |
+        cd $OPENWRTROOT
+        ./scripts/feeds install -a
+        
+    - name: Load Custom Configuration | 加载自定义配置
+      run: |
+        [ -e files ] && mv files $OPENWRTROOT/files
+        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE $OPENWRTROOT/.config
+        chmod +x scripts/*.sh
+        cd $OPENWRTROOT
+        ../$DIY_SH
+        ../scripts/preset-clash-core.sh arm64
+        ../scripts/preset-terminal-tools.sh
+        make defconfig
+        
+    - name: Download Package | 下载各种包
+      id: package
+      run: |
+        cd $OPENWRTROOT
+        cat .config
+        make download -j8
+        find dl -size -1024c -exec ls -l {} \;
+        find dl -size -1024c -exec rm -f {} \;
+  
     - name: Compile Packages | 编译各种包
       id: compile
       run: |
@@ -111,7 +170,7 @@ jobs:
       id: tag
       if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       run: |
-          echo "release_tag=$(date +"%Y.%m.%d")-Lean2" >> $GITHUB_OUTPUT
+          echo "release_tag=$(date +"%Y.%m.%d")-Lean1" >> $GITHUB_OUTPUT
           echo "release_date=$(date +"%Y.%m.%d")" >> $GITHUB_OUTPUT
           touch release.txt
           echo "后台地址：192.168.11.1
@@ -131,24 +190,3 @@ jobs:
           tag_name: ${{ steps.tag.outputs.release_tag }}
           body_path: release.txt
           files: ${{ env.FIRMWARE }}/*
-
-    - name: Delete workflow runs | 删除workflow runs
-      uses: Mattraks/delete-workflow-runs@v2
-      with:
-          retain_days: 1
-          keep_minimum_runs: 1
-
-    - name: Remove old Releases | 删除就得Releases文件，保留最近20个
-      uses: dev-drprasad/delete-older-releases@v0.2.1
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
-      with:
-          keep_latest: 20
-          delete_tags: true
-      env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Delete Artifacts | 删除Artifacts
-      uses: geekyeggo/delete-artifact@v2
-      with:
-         name: |
-            bin-archive
