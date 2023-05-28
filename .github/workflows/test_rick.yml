@@ -37,29 +37,7 @@ jobs:
       FIRMWARE: ${{ steps.compile.outputs.FIRMWARE }}
       GENERATE_STATUS: ${{ steps.generate.outputs.GENERATE_STATUS }}
 
-    steps:
-    - name: Checkout | 使用actions/checkout@v3
-      uses: actions/checkout@v3
-
-    - name: Initialization Environment | 初始化环境
-      env:
-        DEBIAN_FRONTEND: noninteractive
-      run: |
-        echo -e "Total CPU cores\t: $(nproc)"
-        cat /proc/cpuinfo | grep 'model name'
-        free -h
-        uname -a
-        [ -f /proc/version ] && cat /proc/version
-        [ -f /etc/issue.net ] && cat /etc/issue.net
-        [ -f /etc/issue ] && cat /etc/issue
-        ulimit -a
-        
-    - name: Clone Source Code | 克隆Openwrt源代码
-      run: |
-        df -hT $PWD
-        git clone $REPO_URL -b $REPO_BRANCH openwrt
-        cd openwrt
-        
+    steps: 
     - name: Update Feeds | 更新Feeds
       id: update
       run: |
