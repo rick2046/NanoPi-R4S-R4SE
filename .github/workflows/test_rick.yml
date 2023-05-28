@@ -54,39 +54,10 @@ jobs:
         [ -f /etc/issue ] && cat /etc/issue
         ulimit -a
         
-    - name: Clone Source Code | 克隆Openwrt源代码
-      run: |
-        df -hT $PWD
-        git clone $REPO_URL -b $REPO_BRANCH openwrt
-        cd openwrt
-        
-    - name: Update Feeds | 更新Feeds
-      id: update
-      run: |
-        cd openwrt
-        echo "OPENWRTROOT=$PWD" >> $GITHUB_ENV
-        echo "OPENWRTROOT=$PWD" >> $GITHUB_OUTPUT
-        mkdir customfeeds
-        git clone --depth=1 https://github.com/DHDAXCW/packages customfeeds/packages
-        git clone --depth=1 https://github.com/DHDAXCW/luci customfeeds/luci
-        chmod +x ../scripts/*.sh
-        ../scripts/hook-feeds.sh
-
     - name: Install Feeds | 安装Feeds
       run: |
         cd $OPENWRTROOT
         ./scripts/feeds install -a
-        
-    - name: Load Custom Configuration | 加载自定义配置
-      run: |
-        [ -e files ] && mv files $OPENWRTROOT/files
-        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE $OPENWRTROOT/.config
-        chmod +x scripts/*.sh
-        cd $OPENWRTROOT
-        ../$DIY_SH
-        ../scripts/preset-clash-core.sh arm64
-        ../scripts/preset-terminal-tools.sh
-        make defconfig
         
     - name: Download Package | 下载各种包
       id: package
