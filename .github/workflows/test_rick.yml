@@ -44,8 +44,6 @@ jobs:
         cd openwrt
         echo "OPENWRTROOT=$PWD" >> $GITHUB_ENV
         echo "OPENWRTROOT=$PWD" >> $GITHUB_OUTPUT
-        chmod +x ../scripts/*.sh
-        ../scripts/hook-feeds.sh
         
     - name: Install Feeds | 安装Feeds
       run: |
@@ -57,13 +55,6 @@ jobs:
         
     - name: Load Custom Configuration | 加载自定义配置
       run: |
-        [ -e files ] && mv files $OPENWRTROOT/files
-        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE $OPENWRTROOT/.config
-        chmod +x scripts/*.sh
-        cd $OPENWRTROOT
-        ../$DIY_SH
-        ../scripts/preset-clash-core.sh arm64
-        ../scripts/preset-terminal-tools.sh
         make defconfig
         
     - name: Download Package | 下载各种包
