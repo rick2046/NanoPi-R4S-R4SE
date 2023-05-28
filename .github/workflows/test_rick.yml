@@ -39,6 +39,7 @@ jobs:
 
     steps: 
     - name: Install Feeds | 安装Feeds
+      id: update
       run: |
         cd openwrt
         echo "OPENWRTROOT=$PWD" >> $GITHUB_ENV
