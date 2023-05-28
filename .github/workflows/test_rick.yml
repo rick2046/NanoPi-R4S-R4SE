@@ -1,0 +1,97 @@
+#=================================================
+# https://github.com/P3TERX/Actions-OpenWrt
+# Description: Build OpenWrt using GitHub Actions
+# Lisence: MIT
+# Author: P3TERX
+# Blog: https://p3terx.com
+#=================================================
+
+name: NanoPi-R4S-Rick测试
+
+on:
+  repository_dispatch:
+  workflow_dispatch:
+  #schedule:
+    #- cron: 0 17 * * *
+  # watch:
+  #   types: started
+
+env:
+  REPO_URL: https://github.com/DHDAXCW/lede-rockchip
+  REPO_BRANCH: stable
+  CONFIG_FILE: configs/lean/lean.config
+  DIY_SH: scripts/lean.sh
+  KMODS_IN_FIRMWARE: true
+  UPLOAD_RELEASE: true
+  TZ: Asia/Shanghai
+
+jobs:
+  Build:
+    runs-on: self-hosted
+    outputs:
+      OPENWRTROOT: ${{ steps.update.outputs.OPENWRTROOT }}
+      PLATFORM: ${{ steps.compile.outputs.PLATFORM }}
+      TARGET: ${{ steps.compile.outputs.TARGET }}
+      SUBTARGET: ${{ steps.compile.outputs.SUBTARGET }}
+      FIRMWARE: ${{ steps.compile.outputs.FIRMWARE }}
+      GENERATE_STATUS: ${{ steps.generate.outputs.GENERATE_STATUS }}
+
+    steps:
+    - name: Checkout | 使用actions/checkout@v3
+      uses: actions/checkout@v3
+
+    - name: Initialization Environment | 初始化环境
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        echo -e "Total CPU cores\t: $(nproc)"
+        cat /proc/cpuinfo | grep 'model name'
+        free -h
+        uname -a
+        [ -f /proc/version ] && cat /proc/version
+        [ -f /etc/issue.net ] && cat /etc/issue.net
+        [ -f /etc/issue ] && cat /etc/issue
+        ulimit -a
+        
+    - name: Clone Source Code | 克隆Openwrt源代码
+      run: |
+        df -hT $PWD
+        git clone $REPO_URL -b $REPO_BRANCH openwrt
+        cd openwrt
+        
+    - name: Update Feeds | 更新Feeds
+      id: update
+      run: |
+        cd openwrt
+        echo "OPENWRTROOT=$PWD" >> $GITHUB_ENV
+        echo "OPENWRTROOT=$PWD" >> $GITHUB_OUTPUT
+        mkdir customfeeds
+        git clone --depth=1 https://github.com/DHDAXCW/packages customfeeds/packages
+        git clone --depth=1 https://github.com/DHDAXCW/luci customfeeds/luci
+        chmod +x ../scripts/*.sh
+        ../scripts/hook-feeds.sh
+
+    - name: Install Feeds | 安装Feeds
+      run: |
+        cd $OPENWRTROOT
+        ./scripts/feeds install -a
+        
+    - name: Load Custom Configuration | 加载自定义配置
+      run: |
+        [ -e files ] && mv files $OPENWRTROOT/files
+        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE $OPENWRTROOT/.config
+        chmod +x scripts/*.sh
+        cd $OPENWRTROOT
+        ../$DIY_SH
+        ../scripts/preset-clash-core.sh arm64
+        ../scripts/preset-terminal-tools.sh
+        make defconfig
+        
+    - name: Download Package | 下载各种包
+      id: package
+      run: |
+        cd $OPENWRTROOT
+        cat .config
+        make download -j8
+        find dl -size -1024c -exec ls -l {} \;
+        find dl -size -1024c -exec rm -f {} \;
