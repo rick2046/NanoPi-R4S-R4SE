@@ -51,7 +51,6 @@ jobs:
         echo "OPENWRTROOT=$PWD" >> $GITHUB_ENV
         echo "OPENWRTROOT=$PWD" >> $GITHUB_OUTPUT
         cd $OPENWRTROOT
-        ./scripts/feeds install -a
         
     - name: Load Custom Configuration | 加载自定义配置
       run: |
