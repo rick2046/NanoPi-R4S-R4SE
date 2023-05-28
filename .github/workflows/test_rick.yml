@@ -6,7 +6,7 @@
 # Blog: https://p3terx.com
 #=================================================
 
-name: NanoPi-R4S-Rick测试
+name: NanoPi-R4S-全插件
 
 on:
   repository_dispatch:
@@ -18,7 +18,8 @@ on:
 
 env:
   REPO_URL: https://github.com/DHDAXCW/lede-rockchip
-  REPO_BRANCH: stable
+  # REPO_BRANCH: stable
+  REPO_BRANCH: 20220505
   CONFIG_FILE: configs/lean/lean.config
   DIY_SH: scripts/lean.sh
   KMODS_IN_FIRMWARE: true
@@ -37,74 +38,117 @@ jobs:
       GENERATE_STATUS: ${{ steps.generate.outputs.GENERATE_STATUS }}
 
     steps:
-    - name: Checkout | 使用actions/checkout@v3
-      # 使用别人封装好的的action，用于clone该仓库的源码到工作流中
-      uses: actions/checkout@v3
-
-    - name: Initialization Environment | 初始化环境
+    - name: Compile Packages | 编译各种包
+      id: compile
+      run: |
+        cd $OPENWRTROOT
+        echo -e "$(nproc) thread compile"
+        make tools/compile -j$(nproc) || make tools/compile -j$(nproc)
+        make toolchain/compile -j$(nproc) || make toolchain/compile -j$(nproc)
+        make target/compile -j$(nproc) || make target/compile -j$(nproc) IGNORE_ERRORS=1
+        make diffconfig
+        make package/compile -j$(nproc) IGNORE_ERRORS=1 || make package/compile -j$(nproc) IGNORE_ERRORS=1
+        make package/index
+        cd $OPENWRTROOT/bin/packages/*
+        PLATFORM=$(basename `pwd`)
+        echo "PLATFORM=$PLATFORM" >> $GITHUB_ENV
+        echo "PLATFORM=$PLATFORM" >> $GITHUB_OUTPUT
+        cd $OPENWRTROOT/bin/targets/*
+        TARGET=$(basename `pwd`)
+        echo "TARGET=$TARGET" >> $GITHUB_ENV
+        echo "TARGET=$TARGET" >> $GITHUB_OUTPUT
+        cd *
+        SUBTARGET=$(basename `pwd`)
+        echo "SUBTARGET=$SUBTARGET" >> $GITHUB_ENV
+        echo "SUBTARGET=$SUBTARGET" >> $GITHUB_OUTPUT
+        echo "FIRMWARE=$PWD" >> $GITHUB_ENV
+        echo "FIRMWARE=$PWD" >> $GITHUB_OUTPUT
+        echo "COMPILE_STATUS=success" >> $GITHUB_OUTPUT
+        
+    - name: Generate Firmware | 生成固件
+      if: steps.compile.outputs.COMPILE_STATUS == 'success'
+      id: generate
+      run: |
+        cd configs/opkg
+        sed -i "s/subtarget/$SUBTARGET/g" distfeeds*.conf
+        sed -i "s/target\//$TARGET\//g" distfeeds*.conf
+        sed -i "s/platform/$PLATFORM/g" distfeeds*.conf
+        cd $OPENWRTROOT
+        mkdir -p files/etc/uci-defaults/
+        cp ../scripts/init-settings.sh files/etc/uci-defaults/99-init-settings
+        mkdir -p files/etc/opkg
+        cp ../configs/opkg/distfeeds-packages-server.conf files/etc/opkg/distfeeds.conf.server
+        mkdir -p files/etc/opkg/keys
+        cp ../configs/opkg/1035ac73cc4e59e3 files/etc/opkg/keys/1035ac73cc4e59e3
+        if "$KMODS_IN_FIRMWARE" = 'true'
+        then
+            mkdir -p files/www/snapshots
+            cp -r bin/targets files/www/snapshots
+            cp ../configs/opkg/distfeeds-18.06-local.conf files/etc/opkg/distfeeds.conf
+        else
+            cp ../configs/opkg/distfeeds-18.06-remote.conf files/etc/opkg/distfeeds.conf
+        fi
+        cp files/etc/opkg/distfeeds.conf.server files/etc/opkg/distfeeds.conf.mirror
+        sed -i "s/http:\/\/192.168.123.100:2345\/snapshots/https:\/\/openwrt.cc\/snapshots\/$(date +"%Y-%m-%d")\/lean/g" files/etc/opkg/distfeeds.conf.mirror
+        make package/install -j$(nproc) || make package/install -j1 V=s
+        make target/install -j$(nproc) || make target/install -j1 V=s
+        pushd bin/targets/rockchip/armv8
+        #rm -rf **ext4**
+        rm -rf openwrt-rockchip-armv8.manifest
+        rm -rf openwrt-rockchip-armv8-rootfs.tar.gz
+        rm -rf config.buildinfo
+        rm -rf packages-server.zip
+        mv openwrt-rockchip-armv8-friendlyarm_nanopi-r4s-ext4-sysupgrade.img.gz full-friendlyarm_nanopi-r4s-ext4-sysupgrade.img.gz 
+        #mv openwrt-rockchip-armv8-friendlyarm_nanopi-r4se-ext4-sysupgrade.img.gz full-friendlyarm_nanopi-r4se-ext4-sysupgrade.img.gz 
+        mv openwrt-rockchip-armv8-friendlyarm_nanopi-r4s-squashfs-sysupgrade.img.gz full-friendlyarm_nanopi-r4s-squashfs-sysupgrade.img.gz
+        #mv openwrt-rockchip-armv8-friendlyarm_nanopi-r4se-squashfs-sysupgrade.img.gz full-friendlyarm_nanopi-r4se-squashfs-sysupgrade.img.gz
+        popd
+        make checksum
+        mv bin/targets/rockchip/armv8/sha256sums bin/targets/rockchip/armv8/full-sha256sums
+        echo "GENERATE_STATUS=success" >> $GITHUB_OUTPUT
+        
+    - name: Generate release tag | 创建Release标签
+      id: tag
+      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+      run: |
+          echo "release_tag=$(date +"%Y.%m.%d")-Lean2" >> $GITHUB_OUTPUT
+          echo "release_date=$(date +"%Y.%m.%d")" >> $GITHUB_OUTPUT
+          touch release.txt
+          echo "后台地址：192.168.11.1
+                full   = 全插件
+                docker = 带docker
+                slim   = 精简版
+                beggar = 乞丐版" >> release.txt
+          echo "status=success" >> $GITHUB_OUTPUT
+          
+    - name: Upload firmware to release | 上传固件到Release页面
+      uses: softprops/action-gh-release@v1
+      if: steps.tag.outputs.status == 'success' && !cancelled()
       env:
-        # DEBIAN_FRONTEND这个环境变量，告知操作系统应该从哪儿获得用户输入。
-        # 如果设置为”noninteractive”，你就可以直接运行命令，而无需向用户请求输入（所有操作都是非交互式的）。
-        # 这在运行apt-get命令的时候格外有用，因为它会不停的提示用户进行到了哪步并且需要不断确认。
-        DEBIAN_FRONTEND: noninteractive
-      run: |
-        # 输出CPU的内核数量
-        echo -e "Total CPU cores\t: $(nproc)"
-        # 输出CPU的型号信息
-        cat /proc/cpuinfo | grep 'model name'
-        # 以合适的单位显示内存使用情况
-        free -h
-        # 查看系统内核版本号及系统名称
-        uname -a
-        # 查看系统各种信息
-        [ -f /proc/version ] && cat /proc/version
-        [ -f /etc/issue.net ] && cat /etc/issue.net
-        [ -f /etc/issue ] && cat /etc/issue
-        # 查看系统栈空间的限制
-        ulimit -a
-        
-    - name: Clone Source Code | 克隆Openwrt源代码
-      run: |
-        # 查看当前路径的空间大小
-        df -hT $PWD
-        echo "Current PATH: $PWD"
-        git clone $REPO_URL -b $REPO_BRANCH openwrt
-        cd openwrt
-        
-    - name: Update Feeds | 更新Feeds
-      id: update
-      run: |
-        echo "Current PATH: $PWD"
-        cd openwrt
-        echo "OPENWRTROOT=$PWD" >> $GITHUB_ENV
-        echo "OPENWRTROOT=$PWD" >> $GITHUB_OUTPUT
-        mkdir customfeeds
-        git clone --depth=1 https://github.com/DHDAXCW/packages customfeeds/packages
-        git clone --depth=1 https://github.com/DHDAXCW/luci customfeeds/luci
-        chmod +x ../scripts/*.sh
-        ../scripts/hook-feeds.sh
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+          name: ${{ steps.tag.outputs.release_date }} NanoPi-R4S-R4SE-linux.5.4_固件下载
+          tag_name: ${{ steps.tag.outputs.release_tag }}
+          body_path: release.txt
+          files: ${{ env.FIRMWARE }}/*
 
-    - name: Install Feeds | 安装Feeds
-      run: |
-        echo "Current PATH: $PWD"
-        cd $OPENWRTROOT
-        ./scripts/feeds install -a
-        
-    - name: Load Custom Configuration | 加载自定义配置
-      run: |
-        echo "Current PATH: $PWD"
-        [ -e files ] && mv files $OPENWRTROOT/files
-        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE $OPENWRTROOT/.config
-        chmod +x scripts/*.sh
-        cd $OPENWRTROOT
-        ../$DIY_SH
-        ../scripts/preset-clash-core.sh arm64
-        ../scripts/preset-terminal-tools.sh
-        make defconfig
-        
-    - name: Download Package | 下载各种包
-      id: package
-      run: |
-        echo "Current PATH: $PWD"
-        cd $OPENWRTROOT
-        cat .config
+    - name: Delete workflow runs | 删除workflow runs
+      uses: Mattraks/delete-workflow-runs@v2
+      with:
+          retain_days: 1
+          keep_minimum_runs: 1
+
+    - name: Remove old Releases | 删除就得Releases文件，保留最近20个
+      uses: dev-drprasad/delete-older-releases@v0.2.1
+      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+      with:
+          keep_latest: 20
+          delete_tags: true
+      env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Delete Artifacts | 删除Artifacts
+      uses: geekyeggo/delete-artifact@v2
+      with:
+         name: |
+            bin-archive
