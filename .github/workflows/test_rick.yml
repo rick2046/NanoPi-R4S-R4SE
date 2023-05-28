@@ -52,10 +52,6 @@ jobs:
         echo "OPENWRTROOT=$PWD" >> $GITHUB_OUTPUT
         cd $OPENWRTROOT
         
-    - name: Load Custom Configuration | 加载自定义配置
-      run: |
-        make defconfig
-        
     - name: Download Package | 下载各种包
       id: package
       run: |
