@@ -37,10 +37,10 @@ jobs:
       GENERATE_STATUS: ${{ steps.generate.outputs.GENERATE_STATUS }}
 
     steps:
-    - name: Checkout
+    - name: Checkout | 使用actions/checkout@v3
       uses: actions/checkout@v3
 
-    - name: Initialization Environment
+    - name: Initialization Environment | 初始化环境
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
@@ -53,13 +53,13 @@ jobs:
         [ -f /etc/issue ] && cat /etc/issue
         ulimit -a
         
-    - name: Clone Source Code
+    - name: Clone Source Code | 克隆Openwrt源代码
       run: |
         df -hT $PWD
         git clone $REPO_URL -b $REPO_BRANCH openwrt
         cd openwrt
         
-    - name: Update Feeds
+    - name: Update Feeds | 更新Feeds
       id: update
       run: |
         cd openwrt
@@ -71,12 +71,12 @@ jobs:
         chmod +x ../scripts/*.sh
         ../scripts/hook-feeds.sh
 
-    - name: Install Feeds
+    - name: Install Feeds | 安装Feeds
       run: |
         cd $OPENWRTROOT
         ./scripts/feeds install -a
         
-    - name: Load Custom Configuration
+    - name: Load Custom Configuration | 加载自定义配置
       run: |
         [ -e files ] && mv files $OPENWRTROOT/files
         [ -e $CONFIG_FILE ] && mv $CONFIG_FILE $OPENWRTROOT/.config
@@ -87,7 +87,7 @@ jobs:
         ../scripts/preset-terminal-tools.sh
         make defconfig
         
-    - name: Download Package
+    - name: Download Package | 下载各种包
       id: package
       run: |
         cd $OPENWRTROOT
@@ -96,7 +96,7 @@ jobs:
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
   
-    - name: Compile Packages
+    - name: Compile Packages | 编译各种包
       id: compile
       run: |
         cd $OPENWRTROOT
@@ -123,7 +123,7 @@ jobs:
         echo "FIRMWARE=$PWD" >> $GITHUB_OUTPUT
         echo "COMPILE_STATUS=success" >> $GITHUB_OUTPUT
         
-    - name: Generate Firmware
+    - name: Generate Firmware | 生成固件
       if: steps.compile.outputs.COMPILE_STATUS == 'success'
       id: generate
       run: |
@@ -165,7 +165,7 @@ jobs:
         mv bin/targets/rockchip/armv8/sha256sums bin/targets/rockchip/armv8/full-sha256sums
         echo "GENERATE_STATUS=success" >> $GITHUB_OUTPUT
         
-    - name: Generate release tag
+    - name: Generate release tag | 创建Release标签
       id: tag
       if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       run: |
@@ -179,7 +179,7 @@ jobs:
                 beggar = 乞丐版" >> release.txt
           echo "status=success" >> $GITHUB_OUTPUT
           
-    - name: Upload firmware to release
+    - name: Upload firmware to release | 上传固件到Release页面
       uses: softprops/action-gh-release@v1
       if: steps.tag.outputs.status == 'success' && !cancelled()
       env:
@@ -190,13 +190,13 @@ jobs:
           body_path: release.txt
           files: ${{ env.FIRMWARE }}/*
 
-    - name: Delete workflow runs
+    - name: Delete workflow runs | 删除workflow runs
       uses: Mattraks/delete-workflow-runs@v2
       with:
           retain_days: 1
           keep_minimum_runs: 1
 
-    - name: Remove old Releases
+    - name: Remove old Releases | 删除就得Releases文件，保留最近20个
       uses: dev-drprasad/delete-older-releases@v0.2.1
       if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       with:
@@ -205,7 +205,7 @@ jobs:
       env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Delete Artifacts
+    - name: Delete Artifacts | 删除Artifacts
       uses: geekyeggo/delete-artifact@v2
       with:
          name: |
