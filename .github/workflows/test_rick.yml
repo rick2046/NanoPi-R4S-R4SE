@@ -40,6 +40,9 @@ jobs:
     steps: 
     - name: Install Feeds | 安装Feeds
       run: |
+        cd openwrt
+        echo "OPENWRTROOT=$PWD" >> $GITHUB_ENV
+        echo "OPENWRTROOT=$PWD" >> $GITHUB_OUTPUT
         cd $OPENWRTROOT
         ./scripts/feeds install -a
         
