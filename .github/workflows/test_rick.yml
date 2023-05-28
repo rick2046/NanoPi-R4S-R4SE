@@ -38,8 +38,16 @@ jobs:
       GENERATE_STATUS: ${{ steps.generate.outputs.GENERATE_STATUS }}
 
     steps: 
-    - name: Install Feeds | 安装Feeds
+    - name: Update Feeds | 更新Feeds
       id: update
+      run: |
+        cd openwrt
+        echo "OPENWRTROOT=$PWD" >> $GITHUB_ENV
+        echo "OPENWRTROOT=$PWD" >> $GITHUB_OUTPUT
+        chmod +x ../scripts/*.sh
+        ../scripts/hook-feeds.sh
+        
+    - name: Install Feeds | 安装Feeds
       run: |
         cd openwrt
         echo "OPENWRTROOT=$PWD" >> $GITHUB_ENV
