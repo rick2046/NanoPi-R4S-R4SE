@@ -6,7 +6,7 @@
 # Blog: https://p3terx.com
 #=================================================
 
-name: NanoPi-R4S-全插件（不删除版）
+name: NanoPi-R4S-全插件(不删除版)
 
 on:
   repository_dispatch:
@@ -28,7 +28,7 @@ env:
 
 jobs:
   Build:
-    runs-on: ubuntu-20.04
+    runs-on: self-hosted
     outputs:
       OPENWRTROOT: ${{ steps.update.outputs.OPENWRTROOT }}
       PLATFORM: ${{ steps.compile.outputs.PLATFORM }}
@@ -37,7 +37,7 @@ jobs:
       FIRMWARE: ${{ steps.compile.outputs.FIRMWARE }}
       GENERATE_STATUS: ${{ steps.generate.outputs.GENERATE_STATUS }}
 
-    steps: 
+    steps:
     - name: Checkout | 使用actions/checkout@v3
       uses: actions/checkout@v3
 
@@ -71,6 +71,7 @@ jobs:
         git clone --depth=1 https://github.com/DHDAXCW/luci customfeeds/luci
         chmod +x ../scripts/*.sh
         ../scripts/hook-feeds.sh
+
     - name: Install Feeds | 安装Feeds
       run: |
         cd $OPENWRTROOT
@@ -95,19 +96,7 @@ jobs:
         make download -j8
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
-    - name: Initialization Environment | 初始化环境
-      env:
-        DEBIAN_FRONTEND: noninteractive
-      run: |
-        echo -e "Total CPU cores\t: $(nproc)"
-        cat /proc/cpuinfo | grep 'model name'
-        free -h
-        uname -a
-        [ -f /proc/version ] && cat /proc/version
-        [ -f /etc/issue.net ] && cat /etc/issue.net
-        [ -f /etc/issue ] && cat /etc/issue
-        ulimit -a
-
+  
     - name: Compile Packages | 编译各种包
       id: compile
       run: |
@@ -181,7 +170,7 @@ jobs:
       id: tag
       if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       run: |
-          echo "release_tag=$(date +"%Y.%m.%d_%H_%M")-Lean" >> $GITHUB_OUTPUT
+          echo "release_tag=$(date +"%Y.%m.%d_%H_%M")-Lean1" >> $GITHUB_OUTPUT
           echo "release_date=$(date +"%Y.%m.%d_%H_%M")" >> $GITHUB_OUTPUT
           touch release.txt
           echo "后台地址：192.168.11.1
